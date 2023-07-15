@@ -9,7 +9,6 @@ function drawState() {
 
   // write to the screen
   g.flip();
-  console.log(on);
 }
 
 function onInit() {
@@ -41,9 +40,15 @@ NRF.setServices({
   },
 });
 
-// On disconnect, stop the servo
+// On disconnect, turn off the relay
 NRF.on("disconnect", function () {
   D47.write(false);
+  g.off();
+});
+
+// On connect, turn on the oled
+NRF.on("connect", function () {
+  g.on();
 });
 
 NRF.setAdvertising({}, { name: "Sonoff BLE" });
