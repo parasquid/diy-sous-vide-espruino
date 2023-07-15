@@ -1,22 +1,13 @@
-const SCL = D18;
+const SCL = D20;
 const SDA = D19;
-const RF_DATA = D16;
-const ROT_SW = D14;
+const ROT_CLK = D16;
 const ROT_DT = D15;
-const ROT_CLK = D20;
-const OW_DATA = D25;
+const ROT_SW = D14;
+const OW_DATA = D11;
 
 pinMode(ROT_CLK, "input");
 pinMode(ROT_DT, "input");
 pinMode(ROT_SW, "input_pullup");
-
-I2C1.setup({ scl: SCL, sda: SDA, bitrate: 10000000 });
-var g = require("SSD1306").connect(I2C1, start);
-
-var ow = new OneWire(OW_DATA);
-var sensor = require("DS18B20").connect(ow);
-
-var sw = require("RcSwitch").connect(1, RF_DATA, 10);
 
 var state = {
   led: true,
@@ -27,7 +18,7 @@ var state = {
   isRelayOn: false,
   isRunning: false,
   dirty: false,
-  relayOffCommand: 0,
+  relayOffCommand: 15559956,
   kp: 1,
   ki: 0,
   kd: 4,
@@ -46,6 +37,9 @@ function start() {
   // write to the screen
   g.flip();
 }
+
+I2C1.setup({ scl: SCL, sda: SDA, bitrate: 10000000 });
+var g = require("SSD1306").connect(I2C1, start);
 
 function getActualSetTemp(temp, offset) {
   // "jit";
@@ -79,7 +73,6 @@ function drawState(display, obj) {
 }
 
 function updateStateTask() {
-  "jit";
   if (state.dirty) {
     drawState(g, state);
     state.dirty = false;
@@ -99,12 +92,19 @@ function getTempCallback(temp) {
 }
 
 function buttonTask() {
-  // "jit";
+  "compiled";
   state.isRunning = !state.isRunning;
   // if (state.isRunning) sw.send(state.relayOffCommand + 8, 24);
   // else sw.send(state.relayOffCommand, 24);
   state.dirty = true;
+  updateStateTask();
 }
+setWatch(buttonTask, ROT_SW, {
+  repeat: true,
+  edge: "rising",
+  debounce: 25,
+  ieq: true,
+});
 
 var a0 = 0;
 var c0 = 0;
@@ -118,13 +118,16 @@ function handler() {
     if (b != c0) {
       c0 = b;
       var incr = a == b ? 1 : -1;
-      state.setTemp += incr;
-      state.dirty = true;
+      encoderTask(incr);
     }
   }
 }
 setWatch(handler, ROT_DT, { repeat: true, edge: "both", irq: true });
-setWatch(handler, ROT_CLK, { repeat: true, edge: "both", irq: true });
+
+function encoderTask(direction) {
+  state.setTemp += direction;
+  state.dirty = true;
+}
 
 function pid(stateObj) {
   // "jit";
@@ -146,6 +149,7 @@ function pid(stateObj) {
 
   return stateObj;
 }
+
 function pidTask() {
   if (state.isRunning) {
     state = pid(state);
@@ -156,16 +160,59 @@ function pidTask() {
   }
 }
 
+var busy = false;
+var gatt, characteristic;
+function sonoffConnect() {
+  if (busy) {
+    digitalPulse(LED1, 1, [10, 200, 10, 200, 10]);
+    return;
+  }
+  busy = true;
+  NRF.requestDevice({ filters: [{ name: "Sonoff BLE" }] })
+    .then(function (device) {
+      console.log("Found");
+      digitalPulse(LED1, 1, 10);
+      return device.gatt.connect();
+    })
+    .then(function (g) {
+      console.log("Connected");
+      gatt = g;
+      digitalPulse(LED1, 1, 10);
+      return gatt.getPrimaryService("1815"); // Automation IO
+    })
+    .then(function (service) {
+      return service.getCharacteristic("2AE2"); // Boolean
+    })
+    .then(function (c) {
+      console.log("Got Characteristic");
+      characteristic = c;
+      c.writeValue([0x00]).then(function () {
+        busy = false;
+      });
+    })
+    .catch(function (e) {
+      digitalPulse(LED1, 1, 10);
+      console.log("ERROR", e);
+      busy = false;
+    });
+}
+
 function switchRelayOff() {
   // "jit";
-  sw.send(state.relayOffCommand, 24);
-  return false;
+  //sw.send(state.relayOffCommand, 24);
+  busy = true;
+  characteristic.writeValue([0x00]).then(function () {
+    busy = false;
+  });
 }
 
 function switchRelayOn() {
   // "jit";
-  sw.send(state.relayOffCommand + 8, 24);
-  return true;
+  //sw.send(state.relayOffCommand + 8, 24);
+  busy = true;
+  characteristic.writeValue([0x01]).then(function () {
+    busy = false;
+  });
 }
 
 function relayTask() {
@@ -178,15 +225,17 @@ function relayTask() {
   }
 }
 
-// set the relay off when we start
-switchRelayOff();
+var ow = new OneWire(OW_DATA);
+var sensor = require("DS18B20").connect(ow);
 
-setInterval(updateStateTask, 20);
+// set the relay off when we start
+sonoffConnect();
+
+setInterval(updateStateTask, 200);
 setInterval(function () {
   sensor.getTemp(getTempCallback);
   pidTask();
-  relayTask();
   ledTask();
   updateStateTask();
 }, 1000);
-setWatch(buttonTask, ROT_SW, { repeat: true, edge: "rising", debounce: 50 });
+setInterval(relayTask, 1000);
