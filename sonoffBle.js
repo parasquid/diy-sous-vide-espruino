@@ -1,5 +1,6 @@
 // aa6b
 var g;
+var connected = false;
 function drawState() {
   if (!g) return;
   g.clear();
@@ -11,11 +12,9 @@ function drawState() {
   g.flip();
 }
 
-function onInit() {
-  I2C1.setup({ scl: D45, sda: D44, bitrate: 1000000 });
-  setTimeout(function () {
-    g = require("SSD1306").connect(I2C1, drawState, { height: 32 });
-  }, 1000);
+function initDisplay() {
+  I2C1.setup({ scl: D45, sda: D44 });
+  g = require("SSD1306").connect(I2C1, drawState, { height: 32 });
 }
 
 var on = false;
@@ -44,11 +43,27 @@ NRF.setServices({
 NRF.on("disconnect", function () {
   D47.write(false);
   g.off();
+  connected = false;
 });
 
 // On connect, turn on the oled
 NRF.on("connect", function () {
-  g.on();
+  setTimeout(function () {
+    initDisplay();
+  }, 1000);
+  connected = true;
 });
 
 NRF.setAdvertising({}, { name: "Sonoff BLE" });
+
+initDisplay();
+var initOff = setInterval(function () {
+  if (g) {
+    clearInterval(initOff);
+    if (!connected) {
+      D47.write(false);
+      g.clear();
+      g.off();
+    }
+  }
+}, 2000);

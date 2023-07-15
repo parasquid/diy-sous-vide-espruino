@@ -25,6 +25,7 @@ var state = {
   lastError: 0,
   integral: 0,
   derivative: 0,
+  lastMessage: "",
 };
 
 function start() {
@@ -68,10 +69,15 @@ function drawState(display, obj) {
   display.setFontVector(size);
   display.drawString(line3, 0, size * 5);
   display.drawString(line4, 0, size * 6);
+  display.drawString(state.lastMessage, 0, size * 7);
   display.flip();
   // console.log(state);
 }
 
+function msg(message) {
+  state.lastMessage = message;
+  drawState(g, state);
+}
 function updateStateTask() {
   if (state.dirty) {
     drawState(g, state);
@@ -168,15 +174,17 @@ function sonoffConnect() {
     return;
   }
   busy = true;
-  NRF.requestDevice({ filters: [{ name: "Sonoff BLE" }] })
+  NRF.requestDevice({ filters: [{ name: "Sonoff BLE" }], timeout: 1000 })
     .then(function (device) {
-      console.log("Found");
+      state.lastMessage = "Found";
+      drawState(g, state);
       digitalPulse(LED1, 1, 10);
       return device.gatt.connect();
     })
-    .then(function (g) {
-      console.log("Connected");
-      gatt = g;
+    .then(function (_gatt) {
+      state.lastMessage = "Connected";
+      drawState(g, state);
+      gatt = _gatt;
       digitalPulse(LED1, 1, 10);
       return gatt.getPrimaryService("1815"); // Automation IO
     })
@@ -184,7 +192,7 @@ function sonoffConnect() {
       return service.getCharacteristic("2AE2"); // Boolean
     })
     .then(function (c) {
-      console.log("Got Characteristic");
+      msg("Got Characteristic");
       characteristic = c;
       c.writeValue([0x00]).then(function () {
         busy = false;
@@ -193,6 +201,8 @@ function sonoffConnect() {
     .catch(function (e) {
       digitalPulse(LED1, 1, 10);
       console.log("ERROR", e);
+      msg(e);
+      gatt = undefined;
       busy = false;
     });
 }
@@ -228,8 +238,16 @@ function relayTask() {
 var ow = new OneWire(OW_DATA);
 var sensor = require("DS18B20").connect(ow);
 
-// set the relay off when we start
-sonoffConnect();
+setInterval(function () {
+  if (gatt) {
+    if (!gatt.connected) {
+      sonoffConnect();
+    }
+  } else {
+    msg("connecting to BLE");
+    sonoffConnect();
+  }
+}, 5000);
 
 setInterval(updateStateTask, 200);
 setInterval(function () {
