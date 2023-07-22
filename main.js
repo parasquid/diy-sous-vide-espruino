@@ -5,6 +5,7 @@ const ROT_CLK = D16;
 const SDA = D19;
 const SCL = D20;
 const RF_DATA = D25;
+// see https://www.instructables.com/433-MHz-Coil-loaded-antenna/
 const BUZZER = D29;
 
 var state = {
