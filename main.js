@@ -45,6 +45,7 @@ function start() {
   setTimeout(() => {
     analogWrite(BUZZER, 0.5, { freq: 392 });
     setTimeout(() => {
+      digitalWrite(BUZZER, 0);
       analogWrite(BUZZER, 0.5, { freq: 392 });
       setTimeout(() => {
         analogWrite(BUZZER, 0.5, { freq: 523.25 });
@@ -134,7 +135,6 @@ function getTempCallback(temp) {
 }
 
 function buttonTask() {
-  "compiled";
   state.isRunning = !state.isRunning;
   // if (state.isRunning) sw.send(state.relayOffCommand + 8, 24);
   // else sw.send(state.relayOffCommand, 24);
@@ -145,7 +145,6 @@ setWatch(buttonTask, ROT_SW, {
   repeat: true,
   edge: "rising",
   debounce: 25,
-  ieq: true,
 });
 
 var a0 = 0;
@@ -205,30 +204,34 @@ function pidTask() {
 function switchRelayOff() {
   // "jit";
   rfSend(state.relayOffCommand, 24);
-  // analogWrite(BUZZER, 0.5, { freq: 392 });
-  // setTimeout(() => {
-  //   analogWrite(BUZZER, 0.5, { freq: 523.25 });
-  //   setTimeout(() => digitalWrite(BUZZER, 0), 100);
-  // }, 100);
   return false;
 }
 
 function switchRelayOn() {
   // "jit";
   rfSend(state.relayOffCommand + 8, 24);
-  // analogWrite(BUZZER, 0.5, { freq: 532.25 });
-  // setTimeout(() => {
-  //   analogWrite(BUZZER, 0.5, { freq: 392 });
-  //   setTimeout(() => digitalWrite(BUZZER, 0), 100);
-  // }, 100);
   return true;
 }
 
 function relayTask() {
   if (state.isRunning) {
     if (state.pidOutput < 0) {
+      if (state.isRelayOn) {
+        analogWrite(BUZZER, 0.5, { freq: 532.25 });
+        setTimeout(() => {
+          analogWrite(BUZZER, 0.5, { freq: 392 });
+          setTimeout(() => digitalWrite(BUZZER, 0), 100);
+        }, 100);
+      }
       state.isRelayOn = switchRelayOff();
     } else {
+      if (!state.isRelayOn) {
+        analogWrite(BUZZER, 0.5, { freq: 392 });
+        setTimeout(() => {
+          analogWrite(BUZZER, 0.5, { freq: 523.25 });
+          setTimeout(() => digitalWrite(BUZZER, 0), 100);
+        }, 100);
+      }
       state.isRelayOn = switchRelayOn();
     }
   } else {
@@ -246,5 +249,5 @@ setInterval(function () {
   ledTask();
   updateStateTask();
 }, 1000);
-setInterval(relayTask, 500);
+setInterval(relayTask, 250);
 switchRelayOff();
