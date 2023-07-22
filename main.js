@@ -53,6 +53,27 @@ function start() {
   }, 100);
 }
 
+// adapted from rcswitch https://www.espruino.com/modules/RcSwitch.js
+function rfSend(value, length) {
+  var signal = [];
+
+  for (var i = length - 1; i >= 0; i--) {
+    if (value & (1 << i)) {
+      signal.push(1.05);
+      signal.push(0.35);
+    } else {
+      signal.push(0.35);
+      signal.push(1.05);
+    }
+  }
+  signal.push(0.35);
+  signal.push(10.85);
+
+  for (var nRepeat = 0; nRepeat < 3; nRepeat++) {
+    digitalPulse(RF_DATA, 1, signal);
+  }
+}
+
 I2C1.setup({ scl: SCL, sda: SDA, bitrate: 10000000 });
 var g = require("SSD1306").connect(I2C1, start);
 
@@ -180,10 +201,9 @@ function pidTask() {
   }
 }
 
-var sw = require("RcSwitch").connect(1, RF_DATA, 10);
 function switchRelayOff() {
   // "jit";
-  sw.send(state.relayOffCommand, 24);
+  rfSend(state.relayOffCommand, 24);
   // analogWrite(BUZZER, 0.5, { freq: 392 });
   // setTimeout(() => {
   //   analogWrite(BUZZER, 0.5, { freq: 523.25 });
@@ -194,7 +214,7 @@ function switchRelayOff() {
 
 function switchRelayOn() {
   // "jit";
-  sw.send(state.relayOffCommand + 8, 24);
+  rfSend(state.relayOffCommand + 8, 24);
   // analogWrite(BUZZER, 0.5, { freq: 532.25 });
   // setTimeout(() => {
   //   analogWrite(BUZZER, 0.5, { freq: 392 });
@@ -210,6 +230,8 @@ function relayTask() {
     } else {
       state.isRelayOn = switchRelayOn();
     }
+  } else {
+    state.isRelayOn = switchRelayOff();
   }
 }
 
