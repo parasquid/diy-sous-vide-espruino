@@ -1,13 +1,11 @@
-const SCL = D20;
-const SDA = D19;
-const ROT_CLK = D16;
-const ROT_DT = D15;
-const ROT_SW = D14;
 const OW_DATA = D11;
-
-pinMode(ROT_CLK, "input");
-pinMode(ROT_DT, "input");
-pinMode(ROT_SW, "input_pullup");
+const ROT_SW = D14;
+const ROT_DT = D15;
+const ROT_CLK = D16;
+const SDA = D19;
+const SCL = D20;
+const RF_DATA = D25;
+const BUZZER = D29;
 
 var state = {
   led: true,
@@ -28,6 +26,10 @@ var state = {
   lastMessage: "",
 };
 
+pinMode(ROT_CLK, "input");
+pinMode(ROT_DT, "input");
+pinMode(ROT_SW, "input_pullup");
+
 function start() {
   // write some text
   g.clear();
@@ -37,6 +39,18 @@ function start() {
   g.drawString("Cook!", 40, 40); // 60px high in green
   // write to the screen
   g.flip();
+
+  analogWrite(BUZZER, 0.5, { freq: 532.25 });
+  setTimeout(() => {
+    analogWrite(BUZZER, 0.5, { freq: 392 });
+    setTimeout(() => {
+      analogWrite(BUZZER, 0.5, { freq: 392 });
+      setTimeout(() => {
+        analogWrite(BUZZER, 0.5, { freq: 523.25 });
+        setTimeout(() => digitalWrite(BUZZER, 0), 100);
+      }, 100);
+    }, 100);
+  }, 100);
 }
 
 I2C1.setup({ scl: SCL, sda: SDA, bitrate: 10000000 });
@@ -114,7 +128,7 @@ setWatch(buttonTask, ROT_SW, {
 
 var a0 = 0;
 var c0 = 0;
-function handler() {
+function encoderHandler() {
   "compiled";
   var a = ROT_DT.read();
   var b = ROT_CLK.read();
@@ -128,7 +142,7 @@ function handler() {
     }
   }
 }
-setWatch(handler, ROT_DT, { repeat: true, edge: "both", irq: true });
+setWatch(encoderHandler, ROT_DT, { repeat: true, edge: "both", irq: true });
 
 function encoderTask(direction) {
   state.setTemp += direction;
@@ -166,63 +180,27 @@ function pidTask() {
   }
 }
 
-var busy = false;
-var gatt, characteristic;
-function sonoffConnect() {
-  if (busy) {
-    digitalPulse(LED1, 1, [10, 200, 10, 200, 10]);
-    return;
-  }
-  busy = true;
-  NRF.requestDevice({ filters: [{ name: "Sonoff BLE" }], timeout: 1000 })
-    .then(function (device) {
-      state.lastMessage = "Found";
-      drawState(g, state);
-      digitalPulse(LED1, 1, 10);
-      return device.gatt.connect();
-    })
-    .then(function (_gatt) {
-      state.lastMessage = "Connected";
-      drawState(g, state);
-      gatt = _gatt;
-      digitalPulse(LED1, 1, 10);
-      return gatt.getPrimaryService("1815"); // Automation IO
-    })
-    .then(function (service) {
-      return service.getCharacteristic("2AE2"); // Boolean
-    })
-    .then(function (c) {
-      msg("Got Characteristic");
-      characteristic = c;
-      c.writeValue([0x00]).then(function () {
-        busy = false;
-      });
-    })
-    .catch(function (e) {
-      digitalPulse(LED1, 1, 10);
-      console.log("ERROR", e);
-      msg(e);
-      gatt = undefined;
-      busy = false;
-    });
-}
-
+var sw = require("RcSwitch").connect(1, RF_DATA, 10);
 function switchRelayOff() {
   // "jit";
-  //sw.send(state.relayOffCommand, 24);
-  busy = true;
-  characteristic.writeValue([0x00]).then(function () {
-    busy = false;
-  });
+  sw.send(state.relayOffCommand, 24);
+  // analogWrite(BUZZER, 0.5, { freq: 392 });
+  // setTimeout(() => {
+  //   analogWrite(BUZZER, 0.5, { freq: 523.25 });
+  //   setTimeout(() => digitalWrite(BUZZER, 0), 100);
+  // }, 100);
+  return false;
 }
 
 function switchRelayOn() {
   // "jit";
-  //sw.send(state.relayOffCommand + 8, 24);
-  busy = true;
-  characteristic.writeValue([0x01]).then(function () {
-    busy = false;
-  });
+  sw.send(state.relayOffCommand + 8, 24);
+  // analogWrite(BUZZER, 0.5, { freq: 532.25 });
+  // setTimeout(() => {
+  //   analogWrite(BUZZER, 0.5, { freq: 392 });
+  //   setTimeout(() => digitalWrite(BUZZER, 0), 100);
+  // }, 100);
+  return true;
 }
 
 function relayTask() {
@@ -238,17 +216,6 @@ function relayTask() {
 var ow = new OneWire(OW_DATA);
 var sensor = require("DS18B20").connect(ow);
 
-setInterval(function () {
-  if (gatt) {
-    if (!gatt.connected) {
-      sonoffConnect();
-    }
-  } else {
-    msg("connecting to BLE");
-    sonoffConnect();
-  }
-}, 5000);
-
 setInterval(updateStateTask, 200);
 setInterval(function () {
   sensor.getTemp(getTempCallback);
@@ -256,4 +223,5 @@ setInterval(function () {
   ledTask();
   updateStateTask();
 }, 1000);
-setInterval(relayTask, 1000);
+setInterval(relayTask, 500);
+switchRelayOff();

@@ -67,3 +67,62 @@ var initOff = setInterval(function () {
     }
   }
 }, 2000);
+
+// var busy = false;
+// var gatt, characteristic;
+// function sonoffConnect() {
+//   if (busy) {
+//     digitalPulse(LED1, 1, [10, 200, 10, 200, 10]);
+//     return;
+//   }
+//   busy = true;
+//   NRF.requestDevice({ filters: [{ name: "Sonoff BLE" }], timeout: 1000 })
+//     .then(function (device) {
+//       state.lastMessage = "Found";
+//       drawState(g, state);
+//       digitalPulse(LED1, 1, 10);
+//       return device.gatt.connect();
+//     })
+//     .then(function (_gatt) {
+//       state.lastMessage = "Connected";
+//       drawState(g, state);
+//       gatt = _gatt;
+//       digitalPulse(LED1, 1, 10);
+//       return gatt.getPrimaryService("1815"); // Automation IO
+//     })
+//     .then(function (service) {
+//       return service.getCharacteristic("2AE2"); // Boolean
+//     })
+//     .then(function (c) {
+//       msg("Got Characteristic");
+//       characteristic = c;
+//       c.writeValue([0x00]).then(function () {
+//         busy = false;
+//       });
+//     })
+//     .catch(function (e) {
+//       digitalPulse(LED1, 1, 10);
+//       console.log("ERROR", e);
+//       msg(e);
+//       gatt = undefined;
+//       busy = false;
+//     });
+// }
+
+
+// setInterval(function () {
+//   if (gatt) {
+//     if (!gatt.connected) {
+//       sonoffConnect();
+//     }
+//   } else {
+//     msg("connecting to BLE");
+//     sonoffConnect();
+//   }
+// }, 5000);
+
+
+  // busy = true;
+  // characteristic.writeValue([0x00]).then(function () {
+  //   busy = false;
+  // });
